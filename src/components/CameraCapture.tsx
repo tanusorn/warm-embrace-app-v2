@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useCallback } from "react";
-import { Camera, RotateCcw } from "lucide-react";
+import { Camera } from "lucide-react";
 import { NextButton, ChoiceButton } from "./NextButton";
 
 interface CameraCaptureProps {
@@ -11,80 +11,95 @@ export const CameraCapture = ({ onCapture }: CameraCaptureProps) => {
   const [isCapturing, setIsCapturing] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 🔍 Detect Safari iOS / WebView
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  const useFileCapture = isIOS && isSafari;
+
+  // ======================
+  // 📷 Desktop / Android
+  // ======================
   const startCamera = useCallback(async () => {
     try {
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: { ideal: "user" }, // Safari friendly
-        },
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "user" } },
         audio: false,
-      };
+      });
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-
-        // ✅ สำคัญมากสำหรับ Safari
         videoRef.current.onloadedmetadata = async () => {
-          try {
-            await videoRef.current?.play();
-            setIsCapturing(true);
-          } catch (err) {
-            console.error("Video play failed:", err);
-          }
+          await videoRef.current?.play();
+          setIsCapturing(true);
         };
       }
     } catch (err) {
-      console.error("Camera access denied:", err);
-      alert(
-        "ไม่สามารถเปิดกล้องได้ กรุณาใช้ Safari เวอร์ชันล่าสุด หรือเปิดผ่าน HTTPS"
-      );
+      console.error("Camera error:", err);
+      alert("ไม่สามารถเปิดกล้องได้");
     }
   }, []);
 
   const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     setIsCapturing(false);
   }, []);
 
   const capture = useCallback(() => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const context = canvas.getContext("2d");
+    if (!videoRef.current || !canvasRef.current) return;
 
-      if (context) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0);
-        const imageData = canvas.toDataURL("image/jpeg", 0.8);
-        setCapturedImage(imageData);
-        stopCamera();
-      }
-    }
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    const image = canvas.toDataURL("image/jpeg", 0.8);
+    setCapturedImage(image);
+    stopCamera();
   }, [stopCamera]);
 
+  // ======================
+  // 🍎 Safari iOS
+  // ======================
+  const openSafariCamera = () => {
+    fileInputRef.current?.click();
+  };
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCapturedImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ======================
+  // Common
+  // ======================
   const retake = () => {
     setCapturedImage(null);
-    startCamera();
+    if (!useFileCapture) startCamera();
   };
 
   const confirmPhoto = () => {
-    if (capturedImage) {
-      setIsLoading(true);
-      setTimeout(() => {
-        onCapture(capturedImage);
-      }, 2000);
-    }
+    if (!capturedImage) return;
+    setIsLoading(true);
+    setTimeout(() => onCapture(capturedImage), 2000);
   };
 
   return (
@@ -97,19 +112,17 @@ export const CameraCapture = ({ onCapture }: CameraCaptureProps) => {
         📸
       </motion.div>
 
-      <p className="text-lg text-center text-foreground/80 leading-relaxed">
+      <p className="text-lg text-center text-foreground/80">
         ขอดูรอยยิ้มหน่อยได้ไหม
       </p>
 
       <AnimatePresence mode="wait">
         {!isCapturing && !capturedImage && !isLoading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             <NextButton
-              onClick={startCamera}
+              onClick={() =>
+                useFileCapture ? openSafariCamera() : startCamera()
+              }
               icon={<Camera className="w-6 h-6" />}
               label="เปิดกล้อง 📷"
             />
@@ -119,11 +132,10 @@ export const CameraCapture = ({ onCapture }: CameraCaptureProps) => {
         {isCapturing && (
           <motion.div
             className="flex flex-col items-center gap-4"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
           >
-            <div className="relative w-48 h-48 rounded-3xl overflow-hidden shadow-card border-4 border-blush-pink/50">
+            <div className="w-48 h-48 rounded-3xl overflow-hidden border-4">
               <video
                 ref={videoRef}
                 autoPlay
@@ -139,14 +151,12 @@ export const CameraCapture = ({ onCapture }: CameraCaptureProps) => {
         {capturedImage && !isLoading && (
           <motion.div
             className="flex flex-col items-center gap-4"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
           >
-            <div className="relative w-48 h-48 rounded-3xl overflow-hidden shadow-card border-4 border-primary/50">
+            <div className="w-48 h-48 rounded-3xl overflow-hidden border-4">
               <img
                 src={capturedImage}
-                alt="Captured smile"
                 className="w-full h-full object-cover scale-x-[-1]"
               />
             </div>
@@ -166,22 +176,22 @@ export const CameraCapture = ({ onCapture }: CameraCaptureProps) => {
         )}
 
         {isLoading && (
-          <motion.div
-            className="flex flex-col items-center gap-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            <motion.div
-              className="flex gap-2 text-3xl"
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ duration: 0.8, repeat: Infinity }}
-            >
-              💗💗💗
-            </motion.div>
-            <p className="text-muted-foreground">กำลังเตรียมของขวัญ...</p>
+          <motion.div animate={{ opacity: [0, 1] }}>
+            💗💗💗
+            <p>กำลังเตรียมของขวัญ...</p>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Safari camera */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="user"
+        className="hidden"
+        onChange={onFileChange}
+      />
 
       <canvas ref={canvasRef} className="hidden" />
     </div>
