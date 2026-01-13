@@ -17,19 +17,34 @@ export const CameraCapture = ({ onCapture }: CameraCaptureProps) => {
 
   const startCamera = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: { ideal: "user" }, // Safari friendly
+        },
         audio: false,
-      });
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        setIsCapturing(true);
+
+        // ✅ สำคัญมากสำหรับ Safari
+        videoRef.current.onloadedmetadata = async () => {
+          try {
+            await videoRef.current?.play();
+            setIsCapturing(true);
+          } catch (err) {
+            console.error("Video play failed:", err);
+          }
+        };
       }
     } catch (err) {
       console.error("Camera access denied:", err);
-      // Fallback: use a placeholder
-      setCapturedImage("/placeholder.svg");
+      alert(
+        "ไม่สามารถเปิดกล้องได้ กรุณาใช้ Safari เวอร์ชันล่าสุด หรือเปิดผ่าน HTTPS"
+      );
     }
   }, []);
 
@@ -46,7 +61,7 @@ export const CameraCapture = ({ onCapture }: CameraCaptureProps) => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const context = canvas.getContext("2d");
-      
+
       if (context) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
@@ -81,11 +96,11 @@ export const CameraCapture = ({ onCapture }: CameraCaptureProps) => {
       >
         📸
       </motion.div>
-      
+
       <p className="text-lg text-center text-foreground/80 leading-relaxed">
         ขอดูรอยยิ้มหน่อยได้ไหม
       </p>
-      
+
       <AnimatePresence mode="wait">
         {!isCapturing && !capturedImage && !isLoading && (
           <motion.div
@@ -93,10 +108,14 @@ export const CameraCapture = ({ onCapture }: CameraCaptureProps) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <NextButton onClick={startCamera} icon={<Camera className="w-6 h-6" />} label="เปิดกล้อง 📷" />
+            <NextButton
+              onClick={startCamera}
+              icon={<Camera className="w-6 h-6" />}
+              label="เปิดกล้อง 📷"
+            />
           </motion.div>
         )}
-        
+
         {isCapturing && (
           <motion.div
             className="flex flex-col items-center gap-4"
@@ -116,7 +135,7 @@ export const CameraCapture = ({ onCapture }: CameraCaptureProps) => {
             <NextButton onClick={capture} label="ถ่ายเลย! 📸" />
           </motion.div>
         )}
-        
+
         {capturedImage && !isLoading && (
           <motion.div
             className="flex flex-col items-center gap-4"
@@ -132,12 +151,20 @@ export const CameraCapture = ({ onCapture }: CameraCaptureProps) => {
               />
             </div>
             <div className="flex gap-3">
-              <ChoiceButton onClick={retake} label="ถ่ายใหม่" variant="secondary" />
-              <ChoiceButton onClick={confirmPhoto} label="น่ารักมาก! 💕" variant="primary" />
+              <ChoiceButton
+                onClick={retake}
+                label="ถ่ายใหม่"
+                variant="secondary"
+              />
+              <ChoiceButton
+                onClick={confirmPhoto}
+                label="น่ารักมาก! 💕"
+                variant="primary"
+              />
             </div>
           </motion.div>
         )}
-        
+
         {isLoading && (
           <motion.div
             className="flex flex-col items-center gap-4"
@@ -155,7 +182,7 @@ export const CameraCapture = ({ onCapture }: CameraCaptureProps) => {
           </motion.div>
         )}
       </AnimatePresence>
-      
+
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );
