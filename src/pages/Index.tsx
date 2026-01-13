@@ -340,7 +340,7 @@ const Index = () => {
       case 12: // รหัสลับหัวใจ
         return (
           <StoryCard>
-            <PasswordInput correctPassword="12102006" onSuccess={nextPage} />
+            <PasswordInput correctPassword="12092006" onSuccess={nextPage} />
           </StoryCard>
         );
 
