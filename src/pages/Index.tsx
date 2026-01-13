@@ -76,7 +76,9 @@ const Index = () => {
                 🤍
               </motion.div>
               <div className="text-center space-y-2">
-                <p className="text-xl text-foreground">โอเคขึ้นรึยังเอ่ย</p>
+                <p className="text-xl text-foreground">
+                  เป็นไงบ้างวันนี้ โอเคมั้ยเอ่ย
+                </p>
                 <p className="text-2xl font-medium text-foreground">
                   คนเก่ง 🤍
                 </p>
